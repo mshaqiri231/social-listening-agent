@@ -80,15 +80,19 @@ export async function getLead(id: string): Promise<Lead | null> {
   return res.rows[0] ? rowToLead(res.rows[0]) : null;
 }
 
-/** Saves the AI result. Moves "new" leads to "drafted" when there is a draft. */
+/**
+ * Saves the AI result. A new draft always needs a fresh human review, so
+ * "new" and "approved" leads move to "drafted" (or back to "new" if there is no draft).
+ */
 export async function saveAnalysis(id: string, analysis: Analysis) {
   const db = await getDb();
+  const nextStatus = analysis.draft ? "drafted" : "new";
   await db.execute({
     sql: `UPDATE leads
              SET analysis = ?, draft = ?, analyzed_at = datetime('now'),
-                 status = CASE WHEN status = 'new' AND ? <> '' THEN 'drafted' ELSE status END
+                 status = CASE WHEN status IN ('new', 'drafted', 'approved') THEN ? ELSE status END
            WHERE id = ?`,
-    args: [JSON.stringify(analysis), analysis.draft, analysis.draft, id],
+    args: [JSON.stringify(analysis), analysis.draft, nextStatus, id],
   });
 }
 
