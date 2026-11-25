@@ -37,9 +37,19 @@ npm run dev                  # http://localhost:3000
 | `BSKY_HANDLE`, `BSKY_APP_PASSWORD` | Bluesky search. Use an [app password](https://bsky.app/settings/app-passwords), not the account password |
 | `MASTODON_INSTANCE` | Which Mastodon server to read from (default `mastodon.social`) |
 | `SENDER_NAME`, `COMPANY_NAME` | Used in drafts so every message says who is writing |
-| `DATABASE_URL`, `DATABASE_AUTH_TOKEN` | Local SQLite file by default; a Turso/libSQL URL for deployment |
+| `APP_PASSWORD` | Password-protects the app (required when deployed) |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN` | Local SQLite file by default; on Vercel use Turso (`TURSO_*` variables are read too) |
 
 Mastodon and Hacker News work without any keys.
+
+## Deploying (Vercel, free tier)
+
+1. In Vercel, use **Add New → Project** and import this GitHub repository. Next.js is detected automatically.
+2. In the project, go to **Storage → Create Database → Turso**. It's free and adds `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` automatically. The tables are created on first request.
+3. Under **Settings → Environment Variables**, add `ANTHROPIC_API_KEY` and `APP_PASSWORD`. Optionally add the Bluesky and sender variables.
+4. Redeploy. Every push to `main` deploys again automatically.
+
+`APP_PASSWORD` puts the whole app, API included, behind a browser login prompt (any username), so a public URL can't be used by strangers.
 
 ## Code map
 

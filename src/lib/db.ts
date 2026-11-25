@@ -6,9 +6,16 @@ import { mkdirSync } from "node:fs";
 const globalForDb = globalThis as unknown as { db?: Client; dbReady?: Promise<void> };
 
 function makeClient(): Client {
-  const url = process.env.DATABASE_URL ?? "file:data/app.db";
-  if (url.startsWith("file:")) mkdirSync("data", { recursive: true });
-  return createClient({ url, authToken: process.env.DATABASE_AUTH_TOKEN || undefined });
+  // TURSO_* are the names Vercel's Turso integration sets; DATABASE_* are our own names.
+  const url = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || "file:data/app.db";
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.DATABASE_AUTH_TOKEN || undefined;
+
+  if (url.startsWith("file:")) {
+    // Serverless hosts (Vercel) have no lasting disk, so a local file would silently lose data.
+    if (process.env.VERCEL) throw new Error("No database configured: connect a Turso database in Vercel.");
+    mkdirSync("data", { recursive: true });
+  }
+  return createClient({ url, authToken });
 }
 
 const SCHEMA = [

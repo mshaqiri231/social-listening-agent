@@ -1,6 +1,9 @@
 import { AnalysisError, analyzePost } from "@/lib/ai";
 import { getLead, saveAnalysis } from "@/lib/leads";
 
+// One Claude call can take a while; give it room on Vercel (default limits are lower).
+export const maxDuration = 60;
+
 // POST /api/leads/:id/analyze - run the AI on one lead (also used for "regenerate").
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
