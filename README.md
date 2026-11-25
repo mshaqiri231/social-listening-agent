@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Social Listening Outreach Agent
 
-## Getting Started
+Find people who are publicly talking about life moments where life insurance can matter (a new baby, buying a home, losing a parent, starting a business) and get a thoughtful, **human-reviewed** message suggestion for each one.
 
-First, run the development server:
+**Nothing is ever sent by the app.** A person reviews and approves every message, then copies it and sends it on the platform themselves.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## How it works
+
+```
+keywords ──► sources (official/public APIs) ──► SQLite ──► Claude: analyse + draft ──► human review queue
+              Mastodon · Bluesky · Hacker News               (one call per post)        approve → copy → "I sent it"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Input.** Enter keywords or hashtags, or click a preset for one of the four life events.
+2. **Find.** Each selected source is searched in parallel and the posts are stored. Posts already collected are never duplicated, and their review state is kept.
+3. **Analyse.** For each new post, Claude returns structured JSON:
+   - the life event
+   - whether the **author personally** is living it (as opposed to news, celebrity gossip or ads)
+   - relevance (0–100) and sensitivity (low/medium/high)
+   - a short reason for the reviewer
+   - a suggested message, **or no message** when reaching out would be inappropriate
+4. **Review.** Leads appear sorted by relevance. A reviewer edits the draft, clicks **Approve**, then **Copy & open post**, sends it by hand, and clicks **I sent it**. The server refuses to mark anything as sent unless it was approved first.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Running it
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Requires Node 20+.
 
-## Learn More
+```bash
+npm install
+cp .env.example .env.local   # then fill in ANTHROPIC_API_KEY (and optionally Bluesky)
+npm run dev                  # http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Needed for |
+|---|---|
+| `ANTHROPIC_API_KEY` | Analysis and drafts (required) |
+| `BSKY_HANDLE`, `BSKY_APP_PASSWORD` | Bluesky search. Use an [app password](https://bsky.app/settings/app-passwords), not the account password |
+| `MASTODON_INSTANCE` | Which Mastodon server to read from (default `mastodon.social`) |
+| `SENDER_NAME`, `COMPANY_NAME` | Used in drafts so every message says who is writing |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN` | Local SQLite file by default; a Turso/libSQL URL for deployment |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Mastodon and Hacker News work without any keys.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Code map
 
-## Deploy on Vercel
+| Path | What it does |
+|---|---|
+| `src/lib/sources/*` | One file per platform, each returning the same `RawPost` shape. `index.ts` is the registry: adding a platform means one new file and one entry there. |
+| `src/lib/ai.ts` | The prompt, the output schema and the Claude call |
+| `src/lib/leads.ts`, `src/lib/db.ts` | All SQL (two tables: `searches`, `leads`) |
+| `src/app/api/*` | `POST /api/search`, `GET /api/leads`, `PATCH /api/leads/:id`, `POST /api/leads/:id/analyze` |
+| `src/components/*` | Search form, review queue, lead card |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Platform and compliance choices
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Official and public APIs only.**
+  - Mastodon: public hashtag timelines through the REST API.
+  - Bluesky: AT Protocol `searchPosts`, signed in with an app password.
+  - Hacker News: the official Algolia search API.
+  - No scraping.
+- **Not included:**
+  - Reddit: its Data API terms require a separate agreement for commercial use.
+  - X: post search needs a paid API tier.
+  - Both would be a single new file in `src/lib/sources/`.
+- **Human in the loop, enforced on the server, not only in the UI.**
+- **Honest drafts.** The prompt requires each message to say once, naturally, that the sender works at the company. It forbids pitches, prices, guarantees, urgency and fear-based wording.
+- **Sensitive moments.** For grief and other high-sensitivity posts where the person isn't asking for help, the AI suggests *no* message and explains why. A reviewer can still write one by hand.
+- **Prompt-injection safety.** Post text is passed to the model as untrusted data inside `<post>` tags.
+- **Data minimisation.** Only the post, a link to it and the public handle are stored. No profiles or follower data.
