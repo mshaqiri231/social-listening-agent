@@ -15,7 +15,10 @@ export class AnalysisError extends Error {}
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new AnalysisError("ANTHROPIC_API_KEY is not set. Add it to .env.local and restart the server.");
+    throw new AnalysisError(
+      "ANTHROPIC_API_KEY is not set. Add it in Vercel (Settings → Environment Variables, then redeploy) " +
+        "or in .env.local when running locally.",
+    );
   }
   client ??= new Anthropic();
   return client;
